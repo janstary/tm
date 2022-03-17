@@ -25,7 +25,7 @@ mkinst(char R, char W, char M, struct state *t)
 		warn("jump state missing");
 		return NULL;
 	}
-	if ((i = calloc(1, sizeof(struct inst))) == NULL)
+	if ((i = (struct inst*)calloc(1, sizeof(struct inst))) == NULL)
 		err(1, NULL);
 	i->r = R;
 	i->w = W;
@@ -75,7 +75,7 @@ struct state*
 mkstat(char S)
 {
 	struct state *s = NULL;
-	if ((s = calloc(1, sizeof(struct state))) == NULL)
+	if ((s = (struct state *)calloc(1, sizeof(struct state))) == NULL)
 		err(1, NULL);
 	s->s = S;
 	return s;
@@ -215,7 +215,7 @@ mktm(const char* file)
 	struct tm *tm = NULL;
 	if ((f = fopen(file, "r")) == NULL)
 		err(1, "%s", file);
-	if ((tm = calloc(1, sizeof(struct tm))) == NULL)
+	if ((tm = (struct tm*)calloc(1, sizeof(struct tm))) == NULL)
 		err(1, NULL);
 	while (fscanf(f, "%c%c%c%c%c\n", &s, &r, &w, &m, &t) == 5) {
 		if (!(isalnum(s))) {
@@ -244,9 +244,12 @@ mktm(const char* file)
 		}
 	}
 	tm->s = tm->list;
+	fclose(f);
 	return tm;
 bad:
+	fclose(f);
 	free(tm);
+	tm = NULL;
 	return NULL;
 }
 
@@ -258,6 +261,40 @@ reset(struct tm* tm)
 	tm->s = tm->list;
 	free(tm->tape);
 	tm->tlen = 0;
+}
+
+/* Given a machine and a next head move, check if 
+ * the move would be out of alloce'd segment. If so
+ * expand (double the size) of the tape in direction 
+ * of the next head move. */
+int 
+chktape(struct tm* tm, char m)
+{
+	const int expConst = 2;
+	size_t tapeLen = tm->tlen, headPos = tm->head - tm->tape; 
+	
+	if ((tm->head == tm->tape && m == 'L') || (tm->head == tm->tape + tapeLen - 1 && m == 'R')) {
+		char* newTape = (char*)calloc(tapeLen * expConst + 1, sizeof(*newTape));
+		int offset = tm->head == tm->tape ? tapeLen : 0;
+		
+		if (!newTape) {
+			printf("New memory block could not be allocated!\n");
+			printf("Terminating.\n");
+			return -1;
+		}
+		
+		for (size_t i = 0; i < tapeLen * expConst; ++i)
+			newTape[i] = '0';
+		newTape[tapeLen] = '\0';
+
+		memcpy(newTape + offset, tm->tape, tapeLen);
+		free(tm->tape);
+		
+		tm->head = newTape + offset + headPos;
+		tm->tape = newTape;
+		tm->tlen = tm->tlen * expConst;
+	}
+	return 0;
 }
 
 int
@@ -274,6 +311,10 @@ run(struct tm *tm)
 			/* halt */
 			break;
 		}
+		if (chktape(tm, i->m) == -1) {
+			/* failed memory alloc */
+			return -1;
+		}
 		tm->s = i->t;
 		*tm->head = i->w;
 		if (i->m == 'L') {
@@ -287,11 +328,30 @@ run(struct tm *tm)
 	return 0;
 }
 
+/* Simple free function for singly tm (singly linked list) */
+void freetm(struct tm* tm) 
+{
+	struct state* s = tm->list, * prev = NULL;
+	while (s) {
+		prev = s;
+		s = s->next;
+		struct inst* i = prev->inst, * previ = NULL;
+		while (i) {
+			previ = i;
+			i = i->next;
+			free(previ);
+		}
+		free(prev);
+	}
+	free(tm);
+	tm = NULL;
+}
+
 int
 main(int argc, char** argv)
 {
 	int c;
-	struct tm *tm;
+	struct tm *tm = NULL;
 	ssize_t len = 0;
 	size_t size = 0;
 	char *line = NULL;
@@ -346,5 +406,6 @@ main(int argc, char** argv)
 	}
 
 	free(line);
+	freetm(tm);
 	return 0;
 }
