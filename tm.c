@@ -1,6 +1,6 @@
 #include <unistd.h>
 #include <string.h>
-#include <stdlib.h>
+#include <bsd/stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <err.h>
@@ -368,7 +368,7 @@ run(struct tm *tm)
 			prtape(tm);
 		if (steps && tm->step == steps) {
 			if (!qflag)
-				warnx("Halting after %llu steps", tm->step);
+				warnx("Halting after %lu steps", tm->step);
 			break;
 		}
 		if (tm->s == NULL
