@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdint.h>
 
 #define ISMOVE(_m) ((_m == 'L') || (_m == 'N') || (_m == 'R'))
 
